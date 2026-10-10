@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013, 2025, ControlsFX
+ * Copyright (c) 2013, 2026, ControlsFX
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -487,7 +487,7 @@ public class TableView2Skin<S> extends TableViewSkin<S> {
 ////            widthMax = Math.max(widthMax, col.getWidth());
 ////        }
 ////        
-////        widthMax = snapSize(widthMax);
+////        widthMax = snapSizeX(widthMax);
 ////        
 ////        col.impl_setWidth(widthMax);
 ////    }
@@ -909,6 +909,32 @@ public class TableView2Skin<S> extends TableViewSkin<S> {
         return getSkinnable().getItems() == null ? 0 : getSkinnable().getItems().size();
     }
 
+    /** {@inheritDoc} */
+    @Override protected void updateItemCount() {
+        final RowHeader<S> header = getRowHeader();
+        if (header == null) {
+            super.updateItemCount();
+            return;
+        }
+        // Sync the row header only after the tableView scrollbars are updated.
+        header.unbindScrollbars();
+        try {
+            super.updateItemCount();
+        } finally {
+            header.bindScrollbars();
+        }
+    }
+
+    private RowHeader<S> getRowHeader() {
+        if (parentTableView == null) {
+            return rowHeader;
+        }
+        if (parentTableView.getSkin() instanceof TableView2Skin) {
+            return ((TableView2Skin<S>) parentTableView.getSkin()).rowHeader;
+        }
+        return null;
+    }
+
     /**
      * If the scene is not yet instantiated, we need to wait otherwise the
      * VirtualFlow will not shift the cells properly.
@@ -934,10 +960,14 @@ public class TableView2Skin<S> extends TableViewSkin<S> {
     }
     
     private void updateHeaders() {
+        final int itemCount = tableView.getItems() == null ? 0 : tableView.getItems().size();
+        final int columnCount = tableView.getVisibleLeafColumns().size();
         final ObservableList<TablePosition> selectedCells = tableView.getSelectionModel().getSelectedCells();
         final List<Integer> columns = selectedCells.stream()
                 .map(TablePosition::getColumn)
-                .filter(column -> (column > -1 && tableView.getSelectionModel().isCellSelectionEnabled()))
+                .filter(column -> 0 <= column && column < columnCount &&
+                        tableView.getSelectionModel().isCellSelectionEnabled())
+                .distinct()
                 .collect(Collectors.toList());
         if (! oldSelectedColumns.equals(columns)) {
             oldSelectedColumns.clear();
@@ -946,6 +976,8 @@ public class TableView2Skin<S> extends TableViewSkin<S> {
         }
         final List<Integer> rows = selectedCells.stream()
                 .map(TablePosition::getRow)
+                .filter(row -> 0 <= row && row < itemCount)
+                .distinct()
                 .collect(Collectors.toList());
         if (! oldSelectedRows.equals(rows)) {
             oldSelectedRows.clear();
